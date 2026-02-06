@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Become a Provider | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <style>
+    :root {
+      --bg-main: #0C0E14;
+      --bg-card: #151820;
+      --bg-input: #1a1f2e;
+      --border: #2a2f3c;
+      --border-focus: #3BE0FF;
+      --arkeo: #3BE0FF;
+      --arkeo-dim: rgba(59, 224, 255, 0.1);
+      --success: #10b981;
+      --success-dim: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --text: #ffffff;
+      --text-dim: #9ca3af;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background: var(--bg-main);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    
+    /* Navigation */
+    .nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .logo img { height: 36px; }
+    .logo span { color: var(--arkeo); }
+    .back-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--arkeo); }
+    
+    /* Main Container */
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    /* Progress Bar */
+    .progress-container {
+      margin-bottom: 2rem;
+    }
+    .progress-steps {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      margin-bottom: 0.5rem;
+    }
+    .progress-steps::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border);
+      transform: translateY(-50%);
+      z-index: 0;
+    }
+    .progress-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      height: 2px;
+      background: var(--arkeo);
+      transform: translateY(-50%);
+      z-index: 1;
+      transition: width 0.3s ease;
+    }
+    .step-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+      position: relative;
+      z-index: 2;
+      transition: all 0.3s;
+    }
+    .step-dot.active {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+      color: var(--arkeo);
+    }
+    .step-dot.complete {
+      border-color: var(--success);
+      background: var(--success);
+      color: white;
+    }
+    .step-labels {
+      display: flex;
+      justify-content: space-between;
+    }
+    .step-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-align: center;
+      width: 80px;
+    }
+    .step-label.active { color: var(--arkeo); }
+    
+    /* Wizard Card */
+    .wizard-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+    }
+    .wizard-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .wizard-subtitle {
+      color: var(--text-dim);
+      margin-bottom: 2rem;
+    }
+    
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    .form-label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    .form-hint {
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    .form-input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      color: var(--text);
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--arkeo);
+    }
+    .form-input::placeholder {
+      color: var(--text-dim);
+    }
+    
+    /* Chain Selector */
+    .chain-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .chain-option {
+      padding: 1rem;
+      background: var(--bg-input);
+      border: 2px solid var(--border);
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .chain-option:hover {
+      border-color: var(--text-dim);
+    }
+    .chain-option.selected {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+    }
+    .chain-option img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+    }
+    .chain-option .chain-name {
+      font-weight: 500;
+    }
+    .chain-search {
+      margin-bottom: 1rem;
+    }
+    
+    /* Buttons */
+    .btn-group {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .btn {
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--arkeo);
+      color: #000;
+      flex: 1;
+    }
+    .btn-primary:hover {
+      background: #5ce8ff;
+    }
+    .btn-primary:disabled {
+      background: var(--border);
+      color: var(--text-dim);
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--text-dim);
+      color: var(--text);
+    }
+    
+    /* Status Indicator */
+    .status-box {
+      padding: 1rem;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .status-box.testing {
+      background: var(--arkeo-dim);
+      border: 1px solid var(--arkeo);
+    }
+    .status-box.success {
+      background: var(--success-dim);
+      border: 1px solid var(--success);
+    }
+    .status-box.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error);
+    }
+    .status-icon {
+      font-size: 1.25rem;
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--arkeo);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Code Block */
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.875rem;
+      overflow-x: auto;
+      position: relative;
+    }
+    .code-block code {
+      color: #e6edf3;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover {
+      background: var(--arkeo);
+      color: #000;
+      border-color: var(--arkeo);
+    }
+    
+    /* Wallet Address */
+    .wallet-display {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      text-align: center;
+      margin: 1rem 0;
+    }
+    .wallet-label {
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    .wallet-address {
+      font-family: monospace;
+      font-size: 1rem;
+      color: var(--arkeo);
+      word-break: break-all;
+    }
+    .amount-needed {
+      margin-top: 0.5rem;
+      font-weight: 600;
+    }
+    
+    /* Success State */
+    .success-container {
+      text-align: center;
+      padding: 2rem 0;
+    }
+    .success-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+    .success-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .success-subtitle {
+      color: var(--text-dim);
+      margin-bottom: 2rem;
+    }
+    .listing-link {
+      display: inline-block;
+      padding: 0.75rem 1.5rem;
+      background: var(--arkeo);
+      color: #000;
+      text-decoration: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      margin: 0.5rem;
+    }
+    .listing-link.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    
+    /* Hidden */
+    .hidden { display: none !important; }
+    
+    /* Mobile */
+    @media (max-width: 600px) {
+      .chain-grid { grid-template-columns: 1fr; }
+      .btn-group { flex-direction: column; }
+      .container { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <a href="index.html" class="logo">
+      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+      <span>Arkeo</span> Marketplace
+    </a>
+    <a href="index.html" class="back-link">
+      ← Back to Marketplace
+    </a>
+  </nav>
+
+  <div class="container">
+    <!-- Progress Bar -->
+    <div class="progress-container">
+      <div class="progress-steps">
+        <div class="progress-line" id="progressLine" style="width: 0%"></div>
+        <div class="step-dot active" id="dot1">1</div>
+        <div class="step-dot" id="dot2">2</div>
+        <div class="step-dot" id="dot3">3</div>
+        <div class="step-dot" id="dot4">4</div>
+      </div>
+      <div class="step-labels">
+        <span class="step-label active" id="label1">Chain</span>
+        <span class="step-label" id="label2">RPC URL</span>
+        <span class="step-label" id="label3">Rate</span>
+        <span class="step-label" id="label4">Deploy</span>
+      </div>
+    </div>
+
+    <!-- Step 1: Select Chain -->
+    <div class="wizard-card" id="step1">
+      <h2 class="wizard-title">Select Your Chain</h2>
+      <p class="wizard-subtitle">Which blockchain data will you provide?</p>
+      
+      <div class="form-group">
+        <input type="text" class="form-input chain-search" placeholder="🔍 Search chains..." id="chainSearch" oninput="filterChains()">
+      </div>
+      
+      <div class="chain-grid" id="chainGrid">
+        <!-- Chains populated by JS -->
+      </div>
+      
+      <div class="btn-group">
+        <button class="btn btn-primary" id="nextBtn1" disabled onclick="goToStep(2)">
+          Next →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: RPC URL -->
+    <div class="wizard-card hidden" id="step2">
+      <h2 class="wizard-title">Your RPC Endpoint</h2>
+      <p class="wizard-subtitle">Enter the URL where your <span id="selectedChainName">Ethereum</span> node is running.</p>
+      
+      <div class="form-group">
+        <label class="form-label">RPC URL</label>
+        <p class="form-hint">This is the endpoint your node exposes (e.g., http://your-server:8545)</p>
+        <input type="url" class="form-input" id="rpcUrl" placeholder="http://your-node.com:8545" oninput="validateRpcUrl()">
+      </div>
+      
+      <div id="rpcStatus"></div>
+      
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+        <button class="btn btn-primary" id="nextBtn2" disabled onclick="testAndProceed()">
+          Test Connection →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Set Rate -->
+    <div class="wizard-card hidden" id="step3">
+      <h2 class="wizard-title">Set Your Rate</h2>
+      <p class="wizard-subtitle">How much do you want to charge per request?</p>
+      
+      <div class="form-group">
+        <label class="form-label">Pay-As-You-Go Rate</label>
+        <p class="form-hint">Amount in ARKEO tokens per API request. Suggested: 0.001</p>
+        <input type="number" class="form-input" id="paygRate" value="0.001" step="0.0001" min="0.0001">
+      </div>
+      
+      <div style="background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem; padding: 1rem; margin-top: 1rem;">
+        <strong>💡 Example:</strong> At 0.001 ARKEO per request, a subscriber spending 10 ARKEO gets ~10,000 requests.
+      </div>
+      
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goToStep(4)">
+          Continue →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4: Deploy -->
+    <div class="wizard-card hidden" id="step4">
+      <h2 class="wizard-title">Deploy Your Provider</h2>
+      <p class="wizard-subtitle">Run this command on your server to start the Arkeo Sentinel.</p>
+      
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCommand()">Copy</button>
+        <code id="dockerCommand">docker run -d \
+  --name arkeo-sentinel \
+  -p 3636:3636 \
+  -e SERVICE=eth-mainnet \
+  -e RPC_URL=http://your-node:8545 \
+  -e PAYG_RATE=0.001 \
+  arkeonetwork/provider</code>
+      </div>
+      
+      <div class="wallet-display" id="walletSection" style="display: none;">
+        <div class="wallet-label">Send 1 ARKEO to this address to complete registration:</div>
+        <div class="wallet-address" id="walletAddress">arkeo1abc123...</div>
+        <div class="amount-needed">Amount: 1 ARKEO (for bonding)</div>
+      </div>
+      
+      <div id="deployStatus"></div>
+      
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
+        <button class="btn btn-primary" id="checkBtn" onclick="checkSentinel()">
+          I've Started the Container →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 5: Success -->
+    <div class="wizard-card hidden" id="step5">
+      <div class="success-container">
+        <div class="success-icon">🎉</div>
+        <h2 class="success-title">You're Live!</h2>
+        <p class="success-subtitle">Your provider is now listed on the Arkeo Marketplace.</p>
+        
+        <div style="background: var(--bg-input); border-radius: 0.5rem; padding: 1.5rem; margin: 1.5rem 0; text-align: left;">
+          <div style="margin-bottom: 1rem;">
+            <strong>Service:</strong> <span id="finalChain">Ethereum Mainnet</span>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <strong>Rate:</strong> <span id="finalRate">0.001</span> ARKEO/request
+          </div>
+          <div>
+            <strong>Sentinel:</strong> <span id="finalEndpoint">http://your-server:3636</span>
+          </div>
+        </div>
+        
+        <a href="index.html" class="listing-link">View Marketplace</a>
+        <a href="#" class="listing-link secondary" onclick="addAnotherChain()">+ Add Another Chain</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Chain data
+    const chains = [
+      { id: 'eth-mainnet', name: 'Ethereum Mainnet', icon: '⟠' },
+      { id: 'btc-mainnet', name: 'Bitcoin', icon: '₿' },
+      { id: 'cosmos-mainnet', name: 'Cosmos Hub', icon: '⚛' },
+      { id: 'osmosis-mainnet', name: 'Osmosis', icon: '🌊' },
+      { id: 'arbitrum-mainnet', name: 'Arbitrum', icon: '🔵' },
+      { id: 'base-mainnet', name: 'Base', icon: '🔷' },
+      { id: 'polygon-mainnet', name: 'Polygon', icon: '💜' },
+      { id: 'avalanche-mainnet', name: 'Avalanche', icon: '🔺' },
+      { id: 'solana-mainnet', name: 'Solana', icon: '◎' },
+      { id: 'thorchain-mainnet', name: 'THORChain', icon: '⚡' },
+    ];
+
+    let selectedChain = null;
+    let currentStep = 1;
+
+    // Initialize
+    function init() {
+      renderChains(chains);
+    }
+
+    function renderChains(chainList) {
+      const grid = document.getElementById('chainGrid');
+      grid.innerHTML = chainList.map(chain => `
+        <div class="chain-option" onclick="selectChain('${chain.id}', '${chain.name}')">
+          <span style="font-size: 1.5rem;">${chain.icon}</span>
+          <span class="chain-name">${chain.name}</span>
+        </div>
+      `).join('');
+    }
+
+    function filterChains() {
+      const search = document.getElementById('chainSearch').value.toLowerCase();
+      const filtered = chains.filter(c => c.name.toLowerCase().includes(search));
+      renderChains(filtered);
+    }
+
+    function selectChain(id, name) {
+      selectedChain = { id, name };
+      
+      // Update UI
+      document.querySelectorAll('.chain-option').forEach(el => {
+        el.classList.remove('selected');
+        if (el.querySelector('.chain-name').textContent === name) {
+          el.classList.add('selected');
+        }
+      });
+      
+      document.getElementById('nextBtn1').disabled = false;
+      document.getElementById('selectedChainName').textContent = name;
+    }
+
+    function goToStep(step) {
+      // Hide all steps
+      for (let i = 1; i <= 5; i++) {
+        document.getElementById('step' + i).classList.add('hidden');
+        document.getElementById('dot' + Math.min(i, 4)).classList.remove('active', 'complete');
+        document.getElementById('label' + Math.min(i, 4)).classList.remove('active');
+      }
+      
+      // Show current step
+      document.getElementById('step' + step).classList.remove('hidden');
+      
+      // Update progress
+      for (let i = 1; i <= Math.min(step, 4); i++) {
+        const dot = document.getElementById('dot' + i);
+        const label = document.getElementById('label' + i);
+        if (i < step) {
+          dot.classList.add('complete');
+          dot.innerHTML = '✓';
+        } else if (i === step) {
+          dot.classList.add('active');
+          dot.innerHTML = i;
+          label.classList.add('active');
+        }
+      }
+      
+      // Progress line
+      const progressPercent = ((step - 1) / 3) * 100;
+      document.getElementById('progressLine').style.width = progressPercent + '%';
+      
+      currentStep = step;
+      
+      // Update command if on step 4
+      if (step === 4) {
+        updateDockerCommand();
+      }
+      
+      // Update success page
+      if (step === 5) {
+        document.getElementById('finalChain').textContent = selectedChain.name;
+        document.getElementById('finalRate').textContent = document.getElementById('paygRate').value;
+      }
+    }
+
+    function validateRpcUrl() {
+      const url = document.getElementById('rpcUrl').value;
+      const btn = document.getElementById('nextBtn2');
+      
+      try {
+        new URL(url);
+        btn.disabled = false;
+      } catch {
+        btn.disabled = true;
+      }
+    }
+
+    function testAndProceed() {
+      const statusDiv = document.getElementById('rpcStatus');
+      
+      // Show testing status
+      statusDiv.innerHTML = `
+        <div class="status-box testing">
+          <div class="spinner"></div>
+          <span>Testing connection...</span>
+        </div>
+      `;
+      
+      // Simulate test (in real implementation, this would call an API)
+      setTimeout(() => {
+        statusDiv.innerHTML = `
+          <div class="status-box success">
+            <span class="status-icon">✅</span>
+            <span>Connection successful!</span>
+          </div>
+        `;
+        
+        setTimeout(() => goToStep(3), 1000);
+      }, 1500);
+    }
+
+    function updateDockerCommand() {
+      const rpcUrl = document.getElementById('rpcUrl').value;
+      const rate = document.getElementById('paygRate').value;
+      
+      const command = `docker run -d \\
+  --name arkeo-sentinel \\
+  -p 3636:3636 \\
+  -e SERVICE=${selectedChain.id} \\
+  -e RPC_URL=${rpcUrl} \\
+  -e PAYG_RATE=${rate} \\
+  arkeonetwork/provider`;
+      
+      document.getElementById('dockerCommand').textContent = command;
+    }
+
+    function copyCommand() {
+      const command = document.getElementById('dockerCommand').textContent;
+      navigator.clipboard.writeText(command);
+      
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    }
+
+    function checkSentinel() {
+      const statusDiv = document.getElementById('deployStatus');
+      const btn = document.getElementById('checkBtn');
+      
+      btn.disabled = true;
+      btn.textContent = 'Checking...';
+      
+      // Show checking status
+      statusDiv.innerHTML = `
+        <div class="status-box testing">
+          <div class="spinner"></div>
+          <span>Looking for your Sentinel...</span>
+        </div>
+      `;
+      
+      // Simulate check
+      setTimeout(() => {
+        statusDiv.innerHTML = `
+          <div class="status-box success">
+            <span class="status-icon">✅</span>
+            <span>Sentinel detected!</span>
+          </div>
+        `;
+        
+        // Show wallet section
+        document.getElementById('walletSection').style.display = 'block';
+        
+        // Generate mock wallet address
+        const mockAddress = 'arkeo1' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        document.getElementById('walletAddress').textContent = mockAddress;
+        
+        btn.textContent = 'Waiting for funds...';
+        
+        // Simulate receiving funds
+        setTimeout(() => {
+          statusDiv.innerHTML = `
+            <div class="status-box success">
+              <span class="status-icon">✅</span>
+              <span>Funds received! Registering on-chain...</span>
+            </div>
+          `;
+          
+          setTimeout(() => {
+            goToStep(5);
+          }, 2000);
+        }, 3000);
+      }, 2000);
+    }
+
+    function addAnotherChain() {
+      selectedChain = null;
+      document.querySelectorAll('.chain-option').forEach(el => el.classList.remove('selected'));
+      document.getElementById('nextBtn1').disabled = true;
+      document.getElementById('rpcUrl').value = '';
+      document.getElementById('rpcStatus').innerHTML = '';
+      document.getElementById('deployStatus').innerHTML = '';
+      document.getElementById('walletSection').style.display = 'none';
+      document.getElementById('checkBtn').disabled = false;
+      document.getElementById('checkBtn').textContent = "I've Started the Container →";
+      goToStep(1);
+    }
+
+    // Initialize on load
+    init();
+  </script>
+</body>
+</html>
