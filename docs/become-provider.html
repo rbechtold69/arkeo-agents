@@ -391,6 +391,71 @@
       color: var(--text);
     }
     
+    /* Help Box */
+    .help-toggle {
+      color: var(--arkeo);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: normal;
+      margin-left: 0.5rem;
+    }
+    .help-toggle:hover {
+      text-decoration: underline;
+    }
+    .help-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+    .help-title {
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      font-size: 1rem;
+    }
+    .help-subtitle {
+      font-weight: 600;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      color: var(--arkeo);
+    }
+    .help-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.5rem 0;
+    }
+    .help-table td {
+      padding: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .help-table td:first-child {
+      width: 40%;
+      color: var(--text-dim);
+    }
+    .help-table code {
+      background: var(--bg-main);
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.25rem;
+      font-size: 0.85rem;
+    }
+    .help-list {
+      margin: 0.5rem 0;
+      padding-left: 1.25rem;
+    }
+    .help-list li {
+      margin: 0.25rem 0;
+      color: var(--text-dim);
+    }
+    .help-list code {
+      background: var(--bg-main);
+      padding: 0.1rem 0.3rem;
+      border-radius: 0.25rem;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+    
     /* Hidden */
     .hidden { display: none !important; }
     
@@ -458,9 +523,36 @@
       <p class="wizard-subtitle">Enter the URL where your <span id="selectedChainName">Ethereum</span> node is running.</p>
       
       <div class="form-group">
-        <label class="form-label">RPC URL</label>
+        <label class="form-label">RPC URL <span class="help-toggle" onclick="toggleHelp()">ℹ️ Need help?</span></label>
         <p class="form-hint">This is the endpoint your node exposes (e.g., http://your-server:8545)</p>
         <input type="url" class="form-input" id="rpcUrl" placeholder="http://your-node.com:8545" oninput="validateRpcUrl()">
+        
+        <div class="help-box hidden" id="rpcHelp">
+          <div class="help-title">📍 How to find your RPC URL</div>
+          <p>Your RPC URL is the address where your node accepts connections. It's typically your server's IP or domain plus the RPC port.</p>
+          
+          <div class="help-subtitle">Common examples by chain:</div>
+          <table class="help-table">
+            <tr><td><strong>Ethereum (Geth)</strong></td><td><code>http://your-server:8545</code></td></tr>
+            <tr><td><strong>Ethereum (Erigon)</strong></td><td><code>http://your-server:8545</code></td></tr>
+            <tr><td><strong>Bitcoin Core</strong></td><td><code>http://your-server:8332</code></td></tr>
+            <tr><td><strong>Cosmos/Tendermint</strong></td><td><code>http://your-server:26657</code></td></tr>
+            <tr><td><strong>With domain</strong></td><td><code>https://rpc.yoursite.com</code></td></tr>
+          </table>
+          
+          <div class="help-subtitle">Quick checks:</div>
+          <ul class="help-list">
+            <li>Replace <code>your-server</code> with your actual IP or domain</li>
+            <li>Make sure the port is open and accessible from the internet</li>
+            <li>If running locally, use your public IP (not localhost)</li>
+          </ul>
+          
+          <div class="help-subtitle">Not sure? Try this command on your server:</div>
+          <div class="code-block" style="margin-top: 0.5rem; font-size: 0.8rem;">
+            <code>curl http://localhost:8545 -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}'</code>
+          </div>
+          <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-dim);">If this returns a response, your node is running on port 8545.</p>
+        </div>
       </div>
       
       <div id="rpcStatus"></div>
@@ -648,6 +740,11 @@
         document.getElementById('finalChain').textContent = selectedChain.name;
         document.getElementById('finalRate').textContent = document.getElementById('paygRate').value;
       }
+    }
+
+    function toggleHelp() {
+      const helpBox = document.getElementById('rpcHelp');
+      helpBox.classList.toggle('hidden');
     }
 
     function validateRpcUrl() {
