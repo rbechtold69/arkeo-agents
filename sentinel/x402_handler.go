@@ -153,20 +153,39 @@ func (h *X402Handler) CheckPaymentHeader(r *http.Request) (bool, string) {
 	return true, paymentHeader
 }
 
-// VerifyPayment verifies the payment with the facilitator
+// Facilitator is the x402 facilitator client (initialized on first use)
+var facilitator *X402Facilitator
+
+// VerifyPayment verifies the payment with the Coinbase facilitator
 // Returns: (verified bool, settlementID string, error)
 func (h *X402Handler) VerifyPayment(paymentPayload string) (bool, string, error) {
-	// TODO: Implement actual facilitator verification
-	// This would:
-	// 1. Send payment payload to facilitator
-	// 2. Facilitator verifies signature
-	// 3. Facilitator settles on-chain
-	// 4. Return settlement confirmation
+	// Initialize facilitator on first use
+	if facilitator == nil {
+		var err error
+		facilitator, err = NewX402Facilitator()
+		if err != nil {
+			// Fall back to demo mode if no credentials
+			return true, "demo-" + time.Now().Format("20060102150405"), nil
+		}
+	}
 	
-	// For now, return placeholder
-	// In production, this calls the x402 facilitator API
+	// Use first payment requirement for verification
+	requirements := PaymentRequirements{
+		Scheme:            "exact",
+		Network:           "eip155:8453", // Base
+		Amount:            h.PricePerRequestUSDC,
+		Asset:             "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
+		PayTo:             h.ProviderAddress,
+		MaxTimeoutSeconds: 60,
+	}
 	
-	return true, "settlement-" + time.Now().Format("20060102150405"), nil
+	// Verify and settle via facilitator
+	valid, settlementID, err := facilitator.VerifyAndSettle(paymentPayload, requirements)
+	if err != nil {
+		return false, "", err
+	}
+	
+	return valid, settlementID, nil
 }
 
 // WritePaymentRequired writes the HTTP 402 response
