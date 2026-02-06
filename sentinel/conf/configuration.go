@@ -46,6 +46,14 @@ type Configuration struct {
 	ArkeoAuthChainId            string           `json:"arkeo_auth_chain_id,omitempty"`    // Chain ID for auth
 	ArkeoAuthMnemonic           string           `json:"arkeo_auth_mnemonic,omitempty"`    // Mnemonic phrase for signing
 	ArkeoAuthNonceStore         string           `json:"arkeo_auth_nonce_store,omitempty"` // LevelDB path for nonce storage
+	
+	// x402 AI Agent Payment Configuration
+	X402Enabled         bool   `json:"x402_enabled,omitempty" yaml:"x402_enabled,omitempty"`                   // Enable x402 payments
+	X402ProviderAddress string `json:"x402_provider_address,omitempty" yaml:"x402_provider_address,omitempty"` // Address to receive payments
+	X402FacilitatorURL  string `json:"x402_facilitator_url,omitempty" yaml:"x402_facilitator_url,omitempty"`   // x402 facilitator URL
+	X402PriceUSDC       string `json:"x402_price_usdc,omitempty" yaml:"x402_price_usdc,omitempty"`             // Price per request in USDC (atomic units)
+	X402PriceARKEO      string `json:"x402_price_arkeo,omitempty" yaml:"x402_price_arkeo,omitempty"`           // Price per request in ARKEO (atomic units)
+	X402ARKEODiscount   int    `json:"x402_arkeo_discount,omitempty" yaml:"x402_arkeo_discount,omitempty"`     // Discount % for ARKEO payments
 }
 
 // Simple helper function to read an environment or return a default value

@@ -801,6 +801,15 @@ func (p *Proxy) getRouter() *mux.Router {
 
 	router.HandleFunc(RouteManage, p.handleContract).Methods(http.MethodGet, http.MethodPost)
 	router.HandleFunc(RouteProviderData, p.handleProviderData).Methods(http.MethodGet)
+	
+	// x402 AI Agent Payment Routes
+	// Initialize x402 handler with provider address from config
+	if p.Config.X402Enabled {
+		p.InitX402(p.Config.X402ProviderAddress)
+		p.RegisterX402Routes(router)
+		p.logger.Info("x402 AI agent payments enabled")
+	}
+	
 	router.PathPrefix("/").Handler(
 		p.auth(
 			handlers.ProxyHeaders(
