@@ -1,32 +1,205 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Arkeo Data Marketplace</title>
-  <link rel="icon" type="image/x-icon" href="images/favicon.ico">
-  <link rel="stylesheet" href="build/dashboard.css">
-  <script src="config.js"></script>
-  <script>
-    (function() {
-      const gaId = window.DASHBOARD_CONFIG && window.DASHBOARD_CONFIG.gaMeasurementId;
-      if (!gaId) return;
-      const script = document.createElement('script');
-      script.async = true;
-      script.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(gaId);
-      document.head.appendChild(script);
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      window.gtag = gtag;
-      gtag('js', new Date());
-      gtag('config', gaId);
-    })();
-  </script>
+  <title>Arkeo Marketplace 2.0</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <style>
+    :root {
+      --bg-main: #0C0E14;
+      --surface: #151820;
+      --border: #2a2f3c;
+      --arkeo: #3BE0FF;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-main);
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+    }
+    .nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .logo img { height: 40px; }
+    .logo span { color: var(--arkeo); }
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+    }
+    .nav-links a {
+      color: #9ca3af;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--arkeo); }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+    .hero {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+    .hero h1 {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .hero h1 span { color: var(--arkeo); }
+    .hero p {
+      font-size: 1.25rem;
+      color: #9ca3af;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      margin-top: 3rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      text-decoration: none;
+      color: white;
+      transition: all 0.3s;
+    }
+    .card:hover {
+      border-color: var(--arkeo);
+      transform: translateY(-4px);
+    }
+    .card-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .card p {
+      color: #9ca3af;
+      line-height: 1.6;
+    }
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-top: 1rem;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: 4rem;
+      text-align: center;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--arkeo);
+    }
+    .stat-label {
+      color: #9ca3af;
+      font-size: 0.875rem;
+    }
+    @media (max-width: 768px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .nav-links { display: none; }
+    }
+  </style>
 </head>
 <body>
-  <div id="root"></div>
-  
-    <script type="module" src="build/dashboard.js"></script>
+  <nav class="nav">
+    <div class="logo">
+      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+      <span>Arkeo</span> Marketplace
+    </div>
+    <div class="nav-links">
+      <a href="index.html" class="active">Home</a>
+      <a href="agents.html">AI Agents</a>
+      <a href="https://arkeo.network" target="_blank">Network</a>
+      <a href="https://github.com/arkeonetwork" target="_blank">GitHub</a>
+    </div>
+  </nav>
 
+  <div class="container">
+    <div class="hero">
+      <h1>Decentralized <span>Data Infrastructure</span></h1>
+      <p>The open marketplace for blockchain data. Connect to 50+ networks through decentralized providers.</p>
+    </div>
+
+    <div class="cards">
+      <a href="agents.html" class="card">
+        <div class="card-icon">🤖</div>
+        <h3>AI Agents</h3>
+        <p>Pay-per-request with USDC using the x402 protocol. No subscriptions, no wallets required.</p>
+        <span class="badge">NEW — x402 Enabled</span>
+      </a>
+
+      <a href="#" class="card">
+        <div class="card-icon">🔗</div>
+        <h3>Providers</h3>
+        <p>Run blockchain nodes and earn ARKEO by serving data to the network.</p>
+      </a>
+
+      <a href="#" class="card">
+        <div class="card-icon">📊</div>
+        <h3>Subscribers</h3>
+        <p>Subscribe to providers with ARKEO tokens for reliable blockchain data access.</p>
+      </a>
+
+      <a href="#" class="card">
+        <div class="card-icon">💰</div>
+        <h3>Staking</h3>
+        <p>Stake ARKEO to secure the network and earn rewards from marketplace fees.</p>
+      </a>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">50+</div>
+        <div class="stat-label">Supported Chains</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">100+</div>
+        <div class="stat-label">Active Providers</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">1M+</div>
+        <div class="stat-label">API Requests/Day</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">$0.001</div>
+        <div class="stat-label">Per Request (x402)</div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
