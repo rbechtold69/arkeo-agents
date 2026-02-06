@@ -1,0 +1,131 @@
+package types
+
+import (
+	fmt "fmt"
+	"strings"
+
+	"cosmossdk.io/errors"
+
+	"github.com/arkeonetwork/arkeo/common"
+	"github.com/arkeonetwork/arkeo/common/cosmos"
+
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	types "github.com/cosmos/cosmos-sdk/types"
+)
+
+const TypeMsgOpenContract = "open_contract"
+
+var _ sdk.Msg = &MsgOpenContract{}
+
+func NewMsgOpenContract(creator cosmos.AccAddress, provider common.PubKey, service string, client, delegate common.PubKey, contractType ContractType, duration, settlementDuration int64, rate types.Coin, deposit cosmos.Int, authorization ContractAuthorization, qpm int64) *MsgOpenContract {
+	return &MsgOpenContract{
+		Creator:            creator.String(),
+		Provider:           provider.String(),
+		Service:            service,
+		ContractType:       contractType,
+		Duration:           duration,
+		Rate:               rate,
+		Client:             client.String(),
+		Deposit:            deposit,
+		Delegate:           delegate.String(),
+		SettlementDuration: settlementDuration,
+		Authorization:      authorization,
+		QueriesPerMinute:   qpm,
+	}
+}
+
+func (msg *MsgOpenContract) Route() string {
+	return RouterKey
+}
+
+func (msg *MsgOpenContract) Type() string {
+	return TypeMsgOpenContract
+}
+
+func (msg *MsgOpenContract) GetSigners() []sdk.AccAddress {
+	return []sdk.AccAddress{sdk.MustAccAddressFromBech32(msg.Creator)}
+}
+
+func (msg *MsgOpenContract) MustGetSigner() sdk.AccAddress {
+	return sdk.MustAccAddressFromBech32(msg.Creator)
+}
+
+func (msg *MsgOpenContract) GetSignBytes() []byte {
+	bz := ModuleCdc.MustMarshalJSON(msg)
+	return sdk.MustSortJSON(bz)
+}
+
+func (msg *MsgOpenContract) GetSpender() (common.PubKey, error) {
+	if msg.Delegate == "" {
+		clientPubKey, err := common.NewPubKey(msg.Client)
+		if err != nil {
+			return nil, ErrInvalidPubKey
+		}
+		return clientPubKey, nil
+	} else {
+		delegatePubKey, err := common.NewPubKey(msg.Delegate)
+		if err != nil {
+			return nil, ErrInvalidPubKey
+		}
+		return delegatePubKey, nil
+	}
+}
+
+func (msg *MsgOpenContract) ValidateBasic() error {
+	// verify pubkey
+	_, err := common.NewPubKey(msg.Provider)
+	if err != nil {
+		return errors.Wrapf(ErrInvalidPubKey, "invalid pubkey (%s)", err)
+	}
+
+	// basic service sanity
+	if strings.TrimSpace(msg.Service) == "" {
+		return errors.Wrapf(ErrInvalidService, "service cannot be empty")
+	}
+
+	// verify client
+	clientPubKey, err := common.NewPubKey(msg.Client)
+	if err != nil {
+		return errors.Wrapf(ErrInvalidPubKey, "invalid pubkey (%s)", err)
+	}
+
+	signer := msg.MustGetSigner()
+	client, err := clientPubKey.GetMyAddress()
+	if err != nil {
+		return err
+	}
+	if !signer.Equals(client) {
+		return errors.Wrapf(ErrInvalidPubKey, "Signer: %s, Client Address: %s", msg.GetSigners(), client)
+	}
+
+	if msg.Duration <= 0 {
+		return errors.Wrapf(ErrOpenContractDuration, "contract duration cannot be zero")
+	}
+
+	if err := msg.Rate.Validate(); err != nil {
+		return errors.Wrapf(err, "invalid rate")
+	}
+
+	if msg.QueriesPerMinute <= 0 {
+		return fmt.Errorf("queries per minute must be greater than zero")
+	}
+
+	if !msg.Rate.Amount.IsPositive() {
+		return errors.Wrapf(ErrOpenContractRate, "contract rate cannot be zero")
+	}
+
+	if msg.SettlementDuration < 0 {
+		return errors.Wrapf(ErrInvalidModProviderSettlementDuration, "settlement duration cannot be negative")
+	}
+
+	// cannot open pay-as-you-go contract and be "open" authorization. The
+	// reason for this is a pay-as-you-go contract that is open allows anyone
+	// (including the data provider) to completely empty the contract tokens to
+	// the data provider without providing any data to the contract owner. It
+	// would be too easy to "rug" contract owners.
+	if msg.ContractType == ContractType_PAY_AS_YOU_GO && msg.Authorization == ContractAuthorization_OPEN {
+		return errors.Wrapf(ErrInvalidAuthorization, "pay-as-you-go contract cannot use open authorization")
+	}
+
+	return nil
+}

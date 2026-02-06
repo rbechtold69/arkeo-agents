@@ -1,0 +1,503 @@
+package keeper
+
+import (
+	"fmt"
+
+	"cosmossdk.io/errors"
+	sdkmath "cosmossdk.io/math"
+	abci "github.com/cometbft/cometbft/abci/types"
+	cmptm "github.com/cometbft/cometbft/proto/tendermint/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	disttypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
+	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
+
+	"github.com/arkeonetwork/arkeo/common"
+	"github.com/arkeonetwork/arkeo/common/cosmos"
+	"github.com/arkeonetwork/arkeo/x/arkeo/configs"
+	"github.com/arkeonetwork/arkeo/x/arkeo/types"
+)
+
+type Manager struct {
+	keeper Keeper
+	sk     stakingkeeper.Keeper
+}
+
+func NewManager(k Keeper, sk stakingkeeper.Keeper) Manager {
+	return Manager{
+		keeper: k,
+		sk:     sk,
+	}
+}
+
+func (mgr *Manager) BeginBlock(ctx cosmos.Context) error {
+	// if local version is behind the consensus version, panic and don't try to
+	// create a new block
+
+	params := mgr.keeper.GetParams(ctx)
+	ver := mgr.keeper.GetComputedVersion(ctx)
+	swVersion, err := configs.GetSWVersion()
+	if err != nil {
+		return err
+	}
+	if ver > swVersion {
+		panic(
+			fmt.Sprintf("Unsupported Version: update your binary (your version: %d, network consensus version: %d)",
+				swVersion,
+				ver,
+			),
+		)
+	}
+	mgr.keeper.SetVersion(ctx, ver) // update stored version
+
+	// Get the reserve supply
+	reserveSupply, err := mgr.reserveSupply(ctx)
+	if err != nil {
+		mgr.keeper.Logger().Error("unable to get supply with inflation calculation", "error", err)
+		return err
+	}
+
+	validatorPayoutCycle := sdkmath.LegacyNewDec(mgr.FetchConfig(ctx, configs.ValidatorPayoutCycle))
+
+	emissionCurve := sdkmath.LegacyNewDec(int64(params.EmissionCurve)) // Emission curve factor
+	blocksPerYear := sdkmath.LegacyNewDec(int64(params.BlockPerYear))
+
+	//mgr.keeper.Logger().Info(
+	//	"Block Reward Calculation Inputs",
+	//	"block_height", ctx.BlockHeight(),
+	//	"reserve_supply", reserveSupply.Amount.String(),
+	//	"emission_curve", emissionCurve.String(),
+	//	"blocks_per_year", blocksPerYear.String(),
+	//	"validator_payout_cycle", validatorPayoutCycle.String(),
+	//)
+
+	blockReward := mgr.calcBlockReward(ctx, reserveSupply.Amount, emissionCurve, blocksPerYear, validatorPayoutCycle)
+	mgr.keeper.Logger().Info(fmt.Sprintf("Block Reward for block number %d, %v", ctx.BlockHeight(), blockReward))
+
+	var votes = []abci.VoteInfo{}
+	for i := 0; i < ctx.CometInfo().GetLastCommit().Votes().Len(); i++ {
+		vote := ctx.CometInfo().GetLastCommit().Votes().Get(i)
+		abciVote := abci.VoteInfo{
+			Validator: abci.Validator{
+				Address: vote.Validator().Address(),
+				Power:   vote.Validator().Power(),
+			},
+			BlockIdFlag: cmptm.BlockIDFlag(vote.GetBlockIDFlag()),
+		}
+		votes = append(votes, abciVote)
+	}
+
+	if err := mgr.ValidatorPayout(ctx, votes, blockReward); err != nil {
+		mgr.keeper.Logger().Error("unable to settle contracts", "error", err)
+	}
+
+	// One-time seeding of service registry for upgrade compatibility.
+	mgr.keeper.EnsureServiceRegistrySeeded(ctx)
+
+	return nil
+}
+
+func (mgr Manager) EndBlock(ctx cosmos.Context) error {
+	if err := mgr.ContractEndBlock(ctx); err != nil {
+		mgr.keeper.Logger().Error("unable to settle contracts", "error", err)
+	}
+
+	// invariant checks
+	if err := mgr.invariantBondModule(ctx); err != nil {
+		panic(err)
+	}
+	if err := mgr.invariantContractModule(ctx); err != nil {
+		panic(err)
+	}
+	if err := mgr.invariantMaxSupply(ctx); err != nil {
+		panic(err)
+	}
+	return nil
+}
+
+func (mgr Manager) Configs(ctx cosmos.Context) configs.ConfigValues {
+	return configs.GetConfigValues(mgr.keeper.GetVersion(ctx))
+}
+
+// test that the bond module has enough bond in it
+func (mgr Manager) invariantBondModule(ctx cosmos.Context) error {
+	balance := mgr.keeper.GetBalanceOfModule(ctx, types.ProviderName, configs.Denom)
+
+	sum := cosmos.ZeroInt()
+	iter := mgr.keeper.GetProviderIterator(ctx)
+	defer func(iter cosmos.Iterator) {
+		err := iter.Close()
+		if err != nil {
+			mgr.keeper.Logger().Error("fail to iter", "error", err)
+		}
+	}(iter)
+	for ; iter.Valid(); iter.Next() {
+		var provider types.Provider
+		if err := mgr.keeper.Cdc().Unmarshal(iter.Value(), &provider); err != nil {
+			mgr.keeper.Logger().Error("fail to unmarshal provider", "error", err)
+			continue
+		}
+		sum = sum.Add(provider.Bond)
+	}
+
+	if sum.GT(balance) {
+		// TODO: instead of returning an error and causing a panic, pause the bond provider handler and allow the chain to continue to function
+		return errors.Wrapf(types.ErrInvariantBondModule, "bond module does not have enough token in it to back the bond records (%s/%s)", sum.String(), balance.String())
+	}
+
+	return nil
+}
+
+// test that the contract module has enough bond in it
+func (mgr Manager) invariantContractModule(ctx cosmos.Context) error {
+	sums := cosmos.NewCoins()
+	iter := mgr.keeper.GetContractIterator(ctx)
+	defer func(iter cosmos.Iterator) {
+		err := iter.Close()
+		if err != nil {
+			mgr.keeper.Logger().Error("fail to iter", "error", err)
+		}
+	}(iter)
+	for ; iter.Valid(); iter.Next() {
+		var contract types.Contract
+		if err := mgr.keeper.Cdc().Unmarshal(iter.Value(), &contract); err != nil {
+			ctx.Logger().Error("fail to unmarshal contract", "error", err)
+			continue
+		}
+		if contract.IsSettled(ctx.BlockHeight()) {
+			continue
+		}
+		sums = sums.Add(cosmos.NewCoin(contract.Rate.Denom, contract.Deposit.Sub(contract.Paid)))
+	}
+
+	for _, sum := range sums {
+		if sum.Amount.IsZero() {
+			continue
+		}
+		balance := mgr.keeper.GetBalanceOfModule(ctx, types.ContractName, sum.Denom)
+		if sum.Amount.GT(balance) {
+			return errors.Wrapf(types.ErrInvariantContractModule, "contract module does not have enough token (%s) in it to back the bond records (%s/%s)", sum.Denom, sum.Amount.String(), balance.String())
+		}
+	}
+
+	return nil
+}
+
+// test that the total supply does not surpass max supply
+func (mgr Manager) invariantMaxSupply(ctx cosmos.Context) error {
+	supply := mgr.keeper.GetSupply(ctx, configs.Denom)
+
+	max := cosmos.NewInt(mgr.FetchConfig(ctx, configs.MaxSupply))
+	if supply.Amount.GT(max) {
+		return errors.Wrapf(types.ErrInvariantMaxSupply, "supply has surpass the max set (%s/%s)", supply.Amount.String(), max.String())
+	}
+
+	return nil
+}
+
+func (mgr Manager) ContractEndBlock(ctx cosmos.Context) error {
+	set, err := mgr.keeper.GetContractExpirationSet(ctx, ctx.BlockHeight())
+	if err != nil {
+		return err
+	}
+
+	if set.ContractSet == nil || len(set.ContractSet.ContractIds) == 0 {
+		return nil
+	}
+
+	for _, contractId := range set.ContractSet.ContractIds {
+		contract, err := mgr.keeper.GetContract(ctx, contractId)
+		if err != nil {
+			ctx.Logger().Error("unable to fetch contract", "id", contractId, "error", err)
+			continue
+		}
+		if contract.Client.IsEmpty() {
+			continue
+		}
+
+		_, err = mgr.SettleContract(ctx, contract, 0, true)
+		if err != nil {
+			ctx.Logger().Error("unable to settle contract", "id", contractId, "error", err)
+			continue
+		}
+		mgr.keeper.RemoveContractExpirationSet(ctx, contract.Expiration())
+	}
+
+	return nil
+}
+
+// This function pays out rewards to validators.
+// TODO: the method of accomplishing this is admittedly quite inefficient. The
+// better approach would be to track live allocation via assigning "units" to
+// validators when they bond and unbond. The math for this is as follows
+// U = total bond units
+// T = tokens bonded
+// t = new tokens being bonded
+// units = U / (T / t)
+// Since the development goal at the moment is to get this chain up and
+// running, we can save this optimization for another day.
+func (mgr Manager) ValidatorPayout(ctx cosmos.Context, votes []abci.VoteInfo, blockReward sdk.DecCoin) error {
+	if blockReward.IsZero() {
+		return nil
+	}
+
+	// sum tokens
+	total := cosmos.ZeroDec()
+	var totalRemainder cosmos.Dec = cosmos.ZeroDec()
+	for _, vote := range votes {
+		val, err := mgr.sk.ValidatorByConsAddr(ctx, vote.Validator.Address)
+		if err != nil {
+			mgr.keeper.Logger().Info("unable to find validator", "validator", string(vote.Validator.Address))
+			continue
+		}
+		if !val.IsBonded() || val.IsJailed() {
+			continue
+		}
+		total = total.Add(val.GetDelegatorShares())
+	}
+	if total.IsZero() {
+		return nil
+	}
+
+	for _, vote := range votes {
+		if vote.BlockIdFlag.String() == "BLOCK_ID_FLAG_ABSENT" || vote.BlockIdFlag.String() == "BLOCK_ID_FLAG_UNKNOWN" {
+			mgr.keeper.Logger().Info(fmt.Sprintf("validator rewards skipped due to lack of signature: %s, validator : %s ", vote.BlockIdFlag.String(), string(vote.Validator.GetAddress())))
+			continue
+		}
+
+		val, err := mgr.sk.ValidatorByConsAddr(ctx, vote.Validator.Address)
+		if err != nil {
+			mgr.keeper.Logger().Info("unable to find validator", "validator", string(vote.Validator.Address))
+			continue
+		}
+
+		valBz, err := mgr.sk.ValidatorAddressCodec().StringToBytes(val.GetOperator())
+		if err != nil {
+			panic(err)
+		}
+
+		valVersion := mgr.keeper.GetVersionForAddress(ctx, valBz)
+		curVersion := mgr.keeper.GetVersion(ctx)
+		if valVersion < curVersion {
+			continue
+		}
+		acc := cosmos.AccAddress(val.GetOperator())
+
+		totalReward := common.GetSafeShare(val.GetDelegatorShares(), total, blockReward.Amount)
+
+		if totalReward.IsZero() {
+			continue
+		}
+
+		intValidatorReward := totalReward.TruncateInt()
+		remainder := totalReward.Sub(cosmos.NewDec(intValidatorReward.Int64()))
+		totalRemainder = totalRemainder.Add(remainder)
+
+		if err := mgr.keeper.SendFromModuleToModule(ctx, types.ReserveName, disttypes.ModuleName, cosmos.NewCoins(cosmos.NewCoin(blockReward.Denom, intValidatorReward))); err != nil {
+			mgr.keeper.Logger().Error("unable to pay rewards to delegate", "delegate", val.GetOperator(), "error", err)
+			continue
+		}
+		if err := mgr.keeper.AllocateTokensToValidator(ctx, val, sdk.NewDecCoins(sdk.NewDecCoin(blockReward.Denom, intValidatorReward))); err != nil {
+			mgr.keeper.Logger().Error("unable to pay rewards to validator", "validator", val.GetOperator(), "error", err)
+			continue
+		}
+		mgr.keeper.Logger().Info("validator rewards", "validator", acc.String(), "amount", intValidatorReward)
+
+		if err := mgr.EmitValidatorPayoutEvent(ctx, acc, totalReward.TruncateInt()); err != nil {
+			mgr.keeper.Logger().Error("unable to emit validator payout event", "validator", acc.String(), "error", err)
+		}
+	}
+	// Send remainder to the community pool
+	if !totalRemainder.IsZero() {
+		if err := mgr.keeper.SendToCommunityPool(ctx, cosmos.NewCoins(cosmos.NewCoin(blockReward.Denom, totalRemainder.RoundInt())), mgr.keeper.GetModuleAccAddress(types.ReserveName)); err != nil {
+			mgr.keeper.Logger().Error("unable to send remainder to community pool", "error", err)
+		}
+	}
+
+	return nil
+}
+
+func (mgr Manager) calcBlockReward(ctx cosmos.Context, totalReserve, emissionCurve, blocksPerYear, validatorPayoutCycle sdkmath.LegacyDec) sdk.DecCoin {
+	// Block Rewards will take the latest reserve, divide it by the emission
+	// curve factor, then divide by blocks per year
+	if emissionCurve.IsZero() || blocksPerYear.IsZero() {
+		mgr.keeper.Logger().Info("block and emission-curve cannot be zero")
+		return sdk.NewDecCoin(configs.Denom, sdkmath.NewInt(0))
+	}
+
+	if validatorPayoutCycle.IsZero() || ctx.BlockHeight()%validatorPayoutCycle.RoundInt64() != 0 {
+		mgr.keeper.Logger().Info("validator payout cycle cannot be zero")
+		return sdk.NewDecCoin(configs.Denom, sdkmath.NewInt(0))
+	}
+
+	bpyD := blocksPerYear.Quo(validatorPayoutCycle)
+
+	blockReward := totalReserve.Quo(emissionCurve).Quo(bpyD).RoundInt()
+
+	return sdk.NewDecCoin(configs.Denom, blockReward)
+}
+
+func (mgr Manager) FetchConfig(ctx cosmos.Context, name configs.ConfigName) int64 {
+	// TODO: create a handler for admins to be able to change configs on the
+	// fly and check them here before returning
+	return mgr.Configs(ctx).GetInt64Value(name)
+}
+
+// any owed debt is paid to data provider
+func (mgr Manager) SettleContract(ctx cosmos.Context, contract types.Contract, nonce int64, isFinal bool) (types.Contract, error) {
+
+	mgr.keeper.Logger().Info(
+		"SettleContract Debug Values (1)",
+		"isFinal:", isFinal,
+		"contract.Id:", contract.Id,
+		"nonce:", nonce,
+		"contract.Nonce:", contract.Nonce,
+	)
+
+	if nonce > contract.Nonce {
+		contract.Nonce = nonce
+	}
+	totalDebt, err := mgr.contractDebt(ctx, contract)
+	valIncome := common.GetSafeShare(cosmos.NewDec(mgr.FetchConfig(ctx, configs.ReserveTax)), cosmos.NewDec(configs.MaxBasisPoints), totalDebt.ToLegacyDec())
+	debt := totalDebt.Sub(valIncome.RoundInt())
+	if err != nil {
+		return contract, err
+	}
+
+	mgr.keeper.Logger().Info(
+		"SettleContract Debug Values (2)",
+		"debt:", debt,
+	)
+
+	if !debt.IsZero() {
+		provider, err := contract.Provider.GetMyAddress()
+		if err != nil {
+			return contract, err
+		}
+		if err := mgr.keeper.SendFromModuleToAccount(ctx, types.ContractName, provider, cosmos.NewCoins(cosmos.NewCoin(contract.Rate.Denom, debt))); err != nil {
+			return contract, err
+		}
+		if err := mgr.keeper.SendFromModuleToModule(ctx, types.ContractName, types.ReserveName, cosmos.NewCoins(cosmos.NewCoin(contract.Rate.Denom, valIncome.RoundInt()))); err != nil {
+			return contract, err
+		}
+	}
+
+	mgr.keeper.Logger().Info(
+		"SettleContract Debug Values (3)",
+		"contract_id (contract.Id):", contract.Id,
+		"nonce (nonce)", nonce,
+		"contract.Nonce (contract.Nonce)", contract.Nonce,
+		"total_debt (totalDebt)", totalDebt.String(),
+		"val_income (valIncome):", valIncome.RoundInt().String(),
+		"debt_paid_to_provider (debt):", debt.String(),
+		"paid_field_before (contract.Paid):", contract.Paid.String(),
+		"deposit (contract.Deposit):", contract.Deposit.String(),
+		"contract.Rate.Denom:", contract.Rate.Denom,
+	)
+
+	contract.Paid = contract.Paid.Add(totalDebt)
+	if isFinal {
+		remainder := contract.Deposit.Sub(contract.Paid)
+		if !remainder.IsZero() {
+			client, err := contract.Client.GetMyAddress()
+			if err != nil {
+				return contract, err
+			}
+			if err := mgr.keeper.SendFromModuleToAccount(ctx, types.ContractName, client, cosmos.NewCoins(cosmos.NewCoin(contract.Rate.Denom, remainder))); err != nil {
+				return contract, err
+			}
+			// now that the user has some of their funds refunded, the deposit
+			// amount should be updated (to reflect that). This also sets Paid
+			// == Deposit, which causes the record to be deleted, conserving
+			// space
+			contract.Deposit = contract.Paid
+
+			mgr.keeper.Logger().Info(
+				"SettleContract Debug Values (4)",
+				"contract_id (contract.Id):", contract.Id,
+				"isFinal (isFinal):", isFinal,
+				"remainder (remainder):", remainder.String(),
+				"client (client):", client.String(),
+				"contract.Paid (contract.Paid):", contract.Paid.String(),
+			)
+
+		}
+		contract.SettlementHeight = ctx.BlockHeight()
+		// this contract can now be removed from the users list of contracts
+		err = mgr.keeper.RemoveFromUserContractSet(ctx, contract.GetSpender(), contract.Id)
+		if err != nil {
+			return contract, err
+		}
+
+		mgr.keeper.Logger().Info(
+			"SettleContract Debug Values (5)",
+			"contract_id (contract.Id):", contract.Id,
+			"contract.SettlementHeight:", contract.SettlementHeight,
+		)
+
+	}
+
+	err = mgr.keeper.SetContract(ctx, contract)
+	if err != nil {
+		return contract, err
+	}
+
+	mgr.keeper.Logger().Info(
+		"SettleContract Debug Values (6)",
+		"totalDebt:", totalDebt,
+		"valIncome.RoundInt():", valIncome.RoundInt(),
+	)
+
+	if err = mgr.EmitContractSettlementEvent(ctx, totalDebt, valIncome.RoundInt(), &contract); err != nil {
+		return contract, err
+	}
+
+	return contract, nil
+}
+
+func (mgr Manager) contractDebt(ctx cosmos.Context, contract types.Contract) (cosmos.Int, error) {
+	var debt cosmos.Int
+
+	mgr.keeper.Logger().Info(
+		"contractDebt Debug Values (1.5)",
+		"contract.Type:", contract.Type,
+		"ctx.BlockHeight():", ctx.BlockHeight(),
+		"contract.SettlementPeriodEnd():", contract.SettlementPeriodEnd(),
+		"contract.Height:", contract.Height,
+		"contract.Rate.Amount:", contract.Rate.Amount,
+		"contract.Paid:", contract.Paid,
+	)
+
+	switch contract.Type {
+	case types.ContractType_SUBSCRIPTION:
+		height := ctx.BlockHeight()
+		if height > contract.SettlementPeriodEnd() {
+			height = contract.SettlementPeriodEnd()
+		}
+		// debt = contract.Rate.Amount.MulRaw(height - contract.Height).Sub(contract.Paid)
+		// Missing QPM in the formula.
+		debt = contract.Rate.Amount.MulRaw(height - contract.Height).MulRaw(contract.QueriesPerMinute).Sub(contract.Paid)
+	case types.ContractType_PAY_AS_YOU_GO:
+		debt = contract.Rate.Amount.MulRaw(contract.Nonce).Sub(contract.Paid)
+	default:
+		return cosmos.ZeroInt(), errors.Wrapf(types.ErrInvalidContractType, "%s", contract.Type.String())
+	}
+
+	if debt.IsNegative() {
+		return cosmos.ZeroInt(), nil
+	}
+
+	// sanity check, ensure provider cannot take more than deposited into the contract
+	if contract.Paid.Add(debt).GT(contract.Deposit) {
+		return contract.Deposit.Sub(contract.Paid), nil
+	}
+
+	return debt, nil
+}
+
+func (mgr Manager) reserveSupply(ctx cosmos.Context) (sdk.DecCoin, error) {
+	reserveSupply := mgr.keeper.GetBalanceOfModule(ctx, types.ReserveName, configs.Denom)
+
+	mgr.keeper.Logger().Info(fmt.Sprintf("Reserve Supply: %v", reserveSupply))
+
+	return sdk.NewDecCoin(configs.Denom, reserveSupply), nil
+}

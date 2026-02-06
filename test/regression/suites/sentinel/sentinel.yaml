@@ -1,0 +1,32 @@
+{{ template "default-state.yaml" }}
+---
+type: create-blocks
+count: 1
+---
+########################################################################################
+# check metadata.json replies
+########################################################################################
+type: check
+description: check metadata.json
+endpoint: http://localhost:3636/metadata.json
+asserts:
+  - .config.moniker == "regtest"
+---
+########################################################################################
+# check force paid fails a request
+########################################################################################
+type: check
+description: check tier header
+endpoint: http://localhost:3636/mock/ping
+headers:
+  Tier: "free"
+status: 200
+asserts:
+  - .ping == "pong"
+---
+########################################################################################
+# check websockets work
+########################################################################################
+type: check-websocket
+description: check websocket connection
+endpoint: ws://localhost:3636/mock/ws

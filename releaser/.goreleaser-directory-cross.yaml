@@ -1,0 +1,229 @@
+before:
+  hooks:
+    - go mod tidy
+
+env:
+  - CGO_ENABLED=1
+
+builds:
+  - id: api-darwin
+    binary: api
+    env:
+      - CC=o64-clang
+      - CGO_LDFLAGS=-L/lib
+    main: ./cmd/directory/api
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    flags:
+      - -mod=readonly
+      - -trimpath
+    ldflags:
+      - -X main.commit={{.Commit}}
+      - -X main.date={{ .CommitDate }}
+      - -X github.com/cosmos/cosmos-sdk/version.Name=Arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.AppName=arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.Version=v{{ .Version }}
+      - -X github.com/cosmos/cosmos-sdk/version.Commit={{ .Commit }}
+      - -X github.com/cosmos/cosmos-sdk/version.BuildTags=mainnet
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.Version=v{{ .Version }}
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.GitCommit={{ .Commit }}
+      - -w -s
+      - -linkmode=external
+    tags:
+      - 'mainnet'
+
+  - id: indexer-darwin
+    binary: indexer
+    env:
+      - CC=o64-clang
+      - CGO_LDFLAGS=-L/lib
+    main: ./cmd/directory/indexer
+    goos:
+      - darwin
+    goarch:
+      - arm64
+      - amd64
+    flags:
+      - -mod=readonly
+      - -trimpath
+    ldflags:
+      - -X main.commit={{.Commit}}
+      - -X main.date={{ .CommitDate }}
+      - -X github.com/cosmos/cosmos-sdk/version.Name=Arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.AppName=arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.Version=v{{ .Version }}
+      - -X github.com/cosmos/cosmos-sdk/version.Commit={{ .Commit }}
+      - -X github.com/cosmos/cosmos-sdk/version.BuildTags=mainnet
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.Version=v{{ .Version }}
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.GitCommit={{ .Commit }}
+      - -w -s
+      - -linkmode=external
+    tags:
+      - 'mainnet'
+
+  - id: api-linux-arm64
+    binary: api
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    main: ./cmd/directory/api
+    goos:
+      - linux
+    goarch:
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.commit={{.Commit}}
+      - -X main.date={{ .CommitDate }}
+      - -X github.com/cosmos/cosmos-sdk/version.Name=Arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.AppName=arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.BuildTags=mainnet
+      - -X github.com/cosmos/cosmos-sdk/version.Commit={{ .Commit }}
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.Version=v{{ .Version }}
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.GitCommit={{ .Commit }}
+      - -linkmode=external
+      - -extldflags '-Wl,-z,muldefs --static -lm'
+    tags:
+      - 'mainnet'
+  
+  - id: indexer-linux-arm64
+    binary: indexer
+    env:
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    main: ./cmd/directory/indexer
+    goos:
+      - linux
+    goarch:
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.commit={{.Commit}}
+      - -X main.date={{ .CommitDate }}
+      - -X github.com/cosmos/cosmos-sdk/version.Name=Arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.AppName=arkeo
+      - -X github.com/cosmos/cosmos-sdk/version.BuildTags=mainnet
+      - -X github.com/cosmos/cosmos-sdk/version.Commit={{ .Commit }}
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.Version=v{{ .Version }}
+      - -X github.com/arkeonetwork/arkeo/x/arkeo/configs.GitCommit={{ .Commit }}
+      - -linkmode=external
+      - -extldflags '-Wl,-z,muldefs --static -lm'
+    tags:
+      - 'mainnet'
+
+universal_binaries:
+  - id: directory-darwin-universal
+    ids:
+      - api-darwin
+      - indexer-darwin
+    replace: false
+    name_template: >-
+      directory_{{ .Version }}_darwin_universal
+
+archives:
+  - id: archive-versioned
+    allow_different_binary_count: true
+    builds:
+      - api-darwin
+      - indexer-darwin
+      - directory-darwin-universal
+      - api-linux-arm64
+      - indexer-linux-arm64
+    name_template: >-
+      directory_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    wrap_in_directory: false
+    format: zip
+    files:
+      - none*
+
+  - id: archive-binary-api
+    builds:
+      - api-darwin
+      - api-linux-arm64
+    name_template: >-
+      directory_api_{{ .Os }}_{{ .Arch }}
+    wrap_in_directory: false
+    format: binary
+    files:
+      - none*
+
+  - id: archive-binary-indexer
+    builds:
+      - indexer-darwin
+      - indexer-linux-arm64
+    name_template: >-
+      directory_indexer_{{ .Os }}_{{ .Arch }}
+    wrap_in_directory: false
+    format: binary
+    files:
+      - none*
+
+checksum:
+  name_template: >-
+    directory_{{ .Version }}_cross_checksums.txt
+
+dockers:
+  - use: buildx
+    goos: linux
+    goarch: arm64
+    dockerfile: docker/Dockerfile.api
+    image_templates:
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:latest-arm64'
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:{{ .Version }}-arm64'
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title=directory-api"
+      - "--label=org.opencontainers.image.description=Arkeo Directory API Service"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.url=https://arkeo.network/"
+      - "--label=org.opencontainers.image.source=https://github.com/arkeonetwork/arkeo"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+  
+  - use: buildx
+    goos: linux
+    goarch: arm64
+    dockerfile: docker/Dockerfile.indexer
+    image_templates:
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:latest-arm64'
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:{{ .Version }}-arm64'
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title=directory-indexer"
+      - "--label=org.opencontainers.image.description=Arkeo Directory Indexer Service"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.url=https://arkeo.network/"
+      - "--label=org.opencontainers.image.source=https://github.com/arkeonetwork/arkeo"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:latest'
+    image_templates:
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:latest-amd64'
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:latest-arm64'
+
+  - name_template: 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:{{ .Version }}'
+    image_templates:
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:{{ .Version }}-amd64'
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/api:{{ .Version }}-arm64'
+
+  - name_template: 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:latest'
+    image_templates:
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:latest-amd64'
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:latest-arm64'
+
+  - name_template: 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:{{ .Version }}'
+    image_templates:
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:{{ .Version }}-amd64'
+      - 'ghcr.io/arkeonetwork/{{ .ProjectName }}/indexer:{{ .Version }}-arm64'
+
+release:
+  skip_upload: '{{ if eq .Env.RELEASE "true" }}false{{else}}true{{end}}'

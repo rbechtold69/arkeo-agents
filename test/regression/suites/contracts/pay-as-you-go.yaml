@@ -1,0 +1,247 @@
+{{ template "default-state.yaml" }}
+---
+{{ template "provider.yaml" }}
+---
+type: create-blocks
+count: 1
+---
+########################################################################################
+# open pay-as-you-go contract
+########################################################################################
+type: tx-open-contract
+signer: {{ addr_cat }}
+creator: {{ addr_cat }}
+provider: {{ pubkey_fox }}
+service: "mock"
+client: {{ pubkey_cat }}
+contract_type: "PAY_AS_YOU_GO"
+queries_per_minute: 1
+settlement_duration: 11
+duration: 10
+rate:
+  denom: "uarkeo"
+  amount: "3"
+deposit: "100"
+---
+type: create-blocks
+count: 1
+---
+type: check
+description: ensure contract is created
+endpoint: http://localhost:1317/arkeo/contracts
+asserts:
+  - .contract | length == 1
+---
+type: check
+description: ensure contract is available at specific endpoint
+endpoint: http://localhost:1317/arkeo/contract/1
+asserts:
+  - .contract.type == "PAY_AS_YOU_GO"
+  - .contract.paid == "0"
+  - .contract.id == "1"
+  - .contract.nonce == "0"
+---
+type: check
+description: check that contract is in directory service
+endpoint: http://localhost:7777/contract/1
+asserts:
+  - .contract_id | tonumber == 1
+  - .client_pubkey == "tarkeopub1addwnpepq2res6tu0m73ulk5sepgp6g3y37schfgymxy8z6l3lc78k7ju9u45yajwem"
+  - .contract_type == "PAY_AS_YOU_GO"
+  - .duration == 10
+  - .open_cost == 100000000
+  - .settlement_height == 0
+  - .deposit == 100
+  - .authorization == "STRICT"
+  - .queries_per_minute == 1
+  - .nonce == 0
+  - .settlement_duration == 11 
+---
+type: check
+description: cat account balance should decrease
+endpoint: http://localhost:1317/cosmos/bank/v1beta1/balances/{{ addr_cat }}
+asserts:
+  - .balances|length == 1
+  - .balances[]|select(.denom == "uarkeo")|.amount|tonumber == 999999899999900
+---
+########################################################################################
+# check can make a paid request
+########################################################################################
+type: check
+description: check can make paid request
+endpoint: http://localhost:3636/mock/ping
+arkauth:
+  signer: cat
+  id: "1"
+  nonce: "1"
+assert_headers:
+  Tier: "paid"
+asserts:
+  - .ping == "pong"
+---
+type: create-blocks
+count: 1
+---
+########################################################################################
+# query active contracts on sentinel
+########################################################################################
+type: check
+description: ensure contract shows up in active contracts
+endpoint: http://localhost:3636/active-contract/mock/{{ pubkey_cat }}
+asserts:
+  - .contract.provider == "{{ pubkey_fox }}"
+  - .contract.service == 1
+  - .contract.client == "{{ pubkey_cat }}"
+---
+########################################################################################
+# query open claims on sentinel
+########################################################################################
+type: check
+description: ensure contract shows up in active contracts
+endpoint: http://localhost:3636/open-claims
+asserts:
+  - length == 1
+  - .[0].signature == "0e2ad0a02bf31ca722d67ef1af03e3f955f878e48fbc476e658b320ebbe1e9364b397a57328cf4ee6ed4cbb0cbb2bb4d538c165a3950a02ae2912c0ef370d766"
+  - .[0].claimed == false
+---
+########################################################################################
+# cancel pay-as-you-go from client
+########################################################################################
+type: tx-close-contract
+signer: {{ addr_cat }}
+creator: {{ addr_cat }}
+contract_id: 1
+client: {{ pubkey_cat }}
+---
+type: create-blocks
+count: 1
+---
+type: check
+description: fox account balance should NOT increase
+endpoint: http://localhost:1317/cosmos/bank/v1beta1/balances/{{ addr_fox }}
+asserts:
+  - .balances|length == 1
+  - .balances[]|select(.denom == "uarkeo")|.amount|tonumber == 1000000000000000
+---
+type: check
+description: cat account balance should NOT increase
+endpoint: http://localhost:1317/cosmos/bank/v1beta1/balances/{{ addr_cat }}
+asserts:
+  - .balances|length == 1
+  - .balances[]|select(.denom == "uarkeo")|.amount|tonumber == 999999899999900
+---
+type: check
+description: ensure contract is closed
+endpoint: http://localhost:1317/arkeo/contract/1
+asserts:
+  - .contract.paid == "0"
+---
+########################################################################################
+# query specific claims on sentinel
+########################################################################################
+type: check
+description: ensure contract shows up in active contracts
+endpoint: http://localhost:3636/claim/1
+asserts:
+  - .signature == "0e2ad0a02bf31ca722d67ef1af03e3f955f878e48fbc476e658b320ebbe1e9364b397a57328cf4ee6ed4cbb0cbb2bb4d538c165a3950a02ae2912c0ef370d766"
+  - .claimed == false
+  - .contract_id == 1
+---
+########################################################################################
+# claim pay-as-you-go rewards, after cancellation
+########################################################################################
+type: tx-claim-contract
+signer: {{ addr_fox }}
+creator: {{ addr_fox }}
+contract_id: 1
+nonce: 1
+arkauth:
+  signer: cat
+  id: "1"
+  nonce: "1"
+---
+type: create-blocks
+count: 1
+---
+type: check
+description: ensure contract is available at specific endpoint
+endpoint: http://localhost:1317/arkeo/contract/1
+asserts:
+  - .contract.type == "PAY_AS_YOU_GO"
+  - .contract.paid == "3"
+  - .contract.id == "1"
+---
+type: check
+description: cat account balance should decrease
+endpoint: http://localhost:1317/cosmos/bank/v1beta1/balances/{{ addr_fox }}
+asserts:
+  - .balances|length == 1
+  - .balances[]|select(.denom == "uarkeo")|.amount|tonumber == 1000000000000003
+---
+########################################################################################
+# query open claims on sentinel, ensure its now "claimed"
+########################################################################################
+type: check
+description: show claims has been removed from active status
+endpoint: http://localhost:3636/open-claims
+asserts:
+  - length == 0
+---
+########################################################################################
+# claim pay-as-you-go rewards again, but SHOULD NOT double pay provider
+########################################################################################
+type: tx-claim-contract
+signer: {{ addr_fox }}
+creator: {{ addr_fox }}
+contract_id: 1
+nonce: 1
+arkauth:
+  signer: cat
+  id: "1"
+  nonce: "1"
+---
+type: create-blocks
+count: 1
+---
+type: check
+description: ensure contract is available at specific endpoint
+endpoint: http://localhost:1317/arkeo/contract/1
+asserts:
+  - .contract.type == "PAY_AS_YOU_GO"
+  - .contract.paid == "3"
+  - .contract.id == "1"
+---
+type: check
+description: cat account balance should NOT decrease
+endpoint: http://localhost:1317/cosmos/bank/v1beta1/balances/{{ addr_fox }}
+asserts:
+  - .balances|length == 1
+  - .balances[]|select(.denom == "uarkeo")|.amount|tonumber == 1000000000000003
+---
+########################################################################################
+# ensure contract is settled
+########################################################################################
+type: create-blocks
+count: 9
+---
+type: check
+description: fox account balance should NOT increase
+endpoint: http://localhost:1317/cosmos/bank/v1beta1/balances/{{ addr_fox }}
+asserts:
+  - .balances|length == 1
+  - .balances[]|select(.denom == "uarkeo")|.amount|tonumber == 1000000000000003
+---
+type: check
+description: cat account balance should increase
+endpoint: http://localhost:1317/cosmos/bank/v1beta1/balances/{{ addr_cat }}
+asserts:
+  - .balances|length == 1
+  - .balances[]|select(.denom == "uarkeo")|.amount|tonumber == 999999899999997
+---
+type: check
+description: ensure contract is closed
+endpoint: http://localhost:1317/arkeo/contract/1
+asserts:
+  - .contract.paid == "3"
+  - .contract.deposit == "3"
+---

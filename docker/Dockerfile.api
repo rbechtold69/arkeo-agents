@@ -1,0 +1,16 @@
+FROM alpine:latest
+
+COPY ./api /usr/bin/api
+
+WORKDIR /root/.arkeo
+
+RUN apk add --no-cache \
+    bash \
+    coreutils \
+    jq \
+    ca-certificates \
+    curl
+
+ENTRYPOINT [ "/bin/sh" ]
+
+CMD [ "/usr/bin/api" ]

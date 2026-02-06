@@ -1,0 +1,16 @@
+FROM alpine:latest
+
+COPY ./sentinel /usr/bin/sentinel
+
+WORKDIR /root/.arkeo
+
+RUN apk add --no-cache \
+    bash \
+    coreutils \
+    jq \
+    ca-certificates \
+    curl
+
+ENTRYPOINT [ "/bin/sh" ]
+
+CMD [ "/usr/bin/sentinel" ]
