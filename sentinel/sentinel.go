@@ -347,7 +347,19 @@ func (p *Proxy) handleRequestAndRedirect(w http.ResponseWriter, r *http.Request)
 	// check for the WebSocket upgrade header
 	if websocket.IsWebSocketUpgrade(r) {
 		p.logger.Info("[TRACE] WebSocket upgrade detected", "url", r.URL.String())
-		fmt.Println(">>>>>>> Entering websocket....")
+
+		// Extend the write deadline for WebSocket connections only.
+		// WebSocket connections are long-lived; the default 5s WriteTimeout
+		// would kill the upgrade handshake before hijack completes.
+		// Regular HTTP requests are unaffected — they keep the strict 5s timeout.
+		rc := http.NewResponseController(w)
+		if err := rc.SetWriteDeadline(time.Now().Add(24 * time.Hour)); err != nil {
+			p.logger.Error("Failed to extend WebSocket write deadline", "err", err)
+		}
+		if err := rc.SetReadDeadline(time.Now().Add(24 * time.Hour)); err != nil {
+			p.logger.Error("Failed to extend WebSocket read deadline", "err", err)
+		}
+
 		wsProxyURL := *r.URL
 		wsProxyURL.Scheme = "ws" // use the WebSocket scheme
 		wsProxy := websocketproxy.NewProxy(&wsProxyURL)
